@@ -2,13 +2,24 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
 
 	"agent/internal/agent"
 	"agent/internal/config"
+	agentgit "agent/internal/git"
+	"agent/internal/message"
+	"agent/internal/pr"
 	"agent/internal/provider"
+	"agent/internal/provider/claude"
+	"agent/internal/provider/ollama"
+	"agent/internal/provider/openai"
 	"agent/internal/score"
 	"agent/internal/skill"
 	"agent/internal/task"
@@ -299,13 +310,13 @@ func logSkills(skills []skill.Skill) {
 func createProvider(cfg *config.Config) provider.Provider {
 	switch cfg.Provider {
 	case config.ProviderClaude:
-		return claude.New(cfg.Anthropickey, cfg.ClaudeModel)
+		return claude.New(cfg.AnthropicKey, cfg.ClaudeModel)
 	case config.ProviderOpenAI:
 		return openai.New(cfg.OpenAIKey, cfg.OpenAIModel)
 	case config.ProviderOllama:
 		return ollama.New(cfg.OllamaURL, cfg.OllamaModel)
 	default:
-		return claude.New(cfg.Anthropickey, cfg.ClaudeModel)
+		return claude.New(cfg.AnthropicKey, cfg.ClaudeModel)
 	}
 }
 
