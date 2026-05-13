@@ -1,0 +1,50 @@
+{
+  "title": "Add user authentication",
+  "description": "Implement a login page with email and password fields. The form should validate inputs (email format, password strength) and integrate with the auth API.",
+  "constraints": [
+    "Must be responsive (mobile-first)",
+    "Use existing project styling conventions",
+    "Add unit tests for the form validation logic"
+  ],
+  "score_threshold": 85,
+  "questions": [
+    {
+      "id": "q1",
+      "question": "Should the login form use OAuth (Google/GitHub) or email/password?",
+      "context": "Found no existing auth setup. Need to decide the authentication approach.",
+      "options": ["OAuth (Google)", "OAuth (GitHub)", "Email/Password", "Both"],
+      "answer": "Email/Password"
+    }
+  ],
+  "session": {
+    "status": "completed",
+    "branch": "agent/20260506-143022",
+    "approach": "Creating a React component with form validation hooks",
+    "iterations": 8,
+    "decisions": [
+      {
+        "question_id": "q1",
+        "question": "Should the login form use OAuth (Google/GitHub) or email/password?",
+        "answer": "Email/Password"
+      }
+    ],
+    "last_updated": "2026-05-06T14:35:10Z"
+  },
+  "result": {
+    "status": "success",
+    "summary": "Implemented login page with email/password validation, API integration, and unit tests.",
+    "branch": "agent/20260506-143022",
+    "iterations": 8,
+    "provider": "Claude",
+    "skills": ["react-expert", "css-specialist"],
+    "total_tokens": 45200,
+    "score": 92,
+    "score_detail": {
+      "build": 25,
+      "tests": 25,
+      "lint": 10,
+      "self_assessment": 32
+    },
+    "pr_url": "https://github.com/myorg/myrepo/pull/42"
+  }
+}
