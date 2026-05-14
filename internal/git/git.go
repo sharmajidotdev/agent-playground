@@ -33,6 +33,15 @@ func Setup(cfg Config) (string, error) {
 		}
 	}
 
+	if cfg.BaseBranch == "" {
+		if branch, err := detectBaseBranch(cfg.WorkDir); err == nil {
+			cfg.BaseBranch = branch
+			logging.Infof("Auto-detected base branch: %s", cfg.BaseBranch)
+		} else {
+			logging.Warnf("Unable to auto-detect base branch: %v; using current checkout as base", err)
+		}
+	}
+
 	// Configure git credentials if token provided
 	if cfg.Token != "" {
 		if err := configureCredentials(cfg); err != nil {
@@ -66,7 +75,7 @@ func CommitAll(workDir, message string) error {
 		return err
 	}
 	// Check if there's anything to commit
-	out, _ := runGit(workDir, "status", " --porcelain")
+	out, _ := runGit(workDir, "status", "--porcelain")
 	if strings.TrimSpace(out) == "" {
 		return nil // Nothing to commit
 	}
@@ -134,6 +143,12 @@ func generateBranchName() string {
 }
 
 func createBranch(workDir, branch, baseBranch string) error {
+	if isUnbornRepo(workDir) {
+		logging.Infof("Creating branch %s in unborn repo %s", branch, workDir)
+		_, err := runGit(workDir, "checkout", "-b", branch)
+		return err
+	}
+
 	logging.Infof("Creating branch %s from %s in %s", branch, baseBranch, workDir)
 	args := []string{"checkout", "-b", branch}
 	if baseBranch != "" {
@@ -143,9 +158,18 @@ func createBranch(workDir, branch, baseBranch string) error {
 	return err
 }
 
+func isUnbornRepo(workDir string) bool {
+	_, err := runGit(workDir, "rev-parse", "--verify", "HEAD")
+	if err != nil {
+		logging.Debugf("Repository %s appears unborn (no HEAD commit): %v", workDir, err)
+		return true
+	}
+	return false
+}
+
 // CurrentBranch returns the current git branch name.
 func CurrentBranch(workDir string) string {
-	out, err := runGit(workDir, "rev-parse", " --abbrev-ref", "HEAD")
+	out, err := runGit(workDir, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		return ""
 	}
@@ -155,7 +179,7 @@ func CurrentBranch(workDir string) string {
 
 // IsClean returns true if the working directory has no uncommitted changes.
 func IsClean(workDir string) bool {
-	out, _ := runGit(workDir, "status", " --porcelain")
+	out, _ := runGit(workDir, "status", "--porcelain")
 	return strings.TrimSpace(out) == ""
 }
 
@@ -188,6 +212,42 @@ func SanitizeBranchName(s string) string {
 	}
 
 	return s
+}
+
+func detectBaseBranch(workDir string) (string, error) {
+	branch := CurrentBranch(workDir)
+	if branch != "" && branch != "HEAD" {
+		return branch, nil
+	}
+
+	if branch, err := detectRemoteHeadBranch(workDir); err == nil && branch != "" {
+		return branch, nil
+	}
+
+	return "", fmt.Errorf("no valid base branch detected")
+}
+
+func detectRemoteHeadBranch(workDir string) (string, error) {
+	out, err := runGit(workDir, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+	if err == nil {
+		if branch := strings.TrimSpace(out); branch != "" {
+			return branch, nil
+		}
+	}
+
+	out, err = runGit(workDir, "remote", "show", "origin")
+	if err != nil {
+		return "", err
+	}
+
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "HEAD branch: ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "HEAD branch: ")), nil
+		}
+	}
+
+	return "", fmt.Errorf("origin HEAD branch not found")
 }
 
 func sanitizeGitArgs(args []string) []string {
