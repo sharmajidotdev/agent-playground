@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"agent/internal/agent"
 	"agent/internal/config"
 	agentgit "agent/internal/git"
+	"agent/internal/logging"
 	"agent/internal/message"
 	"agent/internal/pr"
 	"agent/internal/provider"
@@ -28,11 +28,13 @@ import (
 )
 
 func main() {
-	log.SetFlags(log.Ltime | log.Lmsgprefix)
-	log.SetPrefix("[main] ")
+	if err := logging.Init(os.Getenv("LOG_LEVEL")); err != nil {
+		fmt.Fprintf(os.Stderr, "invalid log level: %v\n", err)
+		os.Exit(1)
+	}
 
 	if err := run(); err != nil {
-		log.Fatalf("Fatal: %v", err)
+		logging.Fatalf("Fatal: %v", err)
 	}
 }
 
@@ -41,7 +43,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("config error: %w", err)
 	}
-	log.Printf("Provider: %s | Workspace: %s", cfg.Provider, cfg.WorkspacePath)
+	logging.Infof("Provider: %s | Workspace: %s", cfg.Provider, cfg.WorkspacePath)
 
 	// Git setup: ensure repo exists and create working branch
 	branch, err := agentgit.Setup(agentgit.Config{
@@ -55,7 +57,7 @@ func run() error {
 		return fmt.Errorf("git setup: %w", err)
 	}
 
-	log.Printf("Working branch: %s", branch)
+	logging.Infof("Working branch: %s", branch)
 
 	// Load task
 	t, err := task.LoadFromFile(cfg.TaskFile)
@@ -63,7 +65,7 @@ func run() error {
 		return fmt.Errorf("task error: %w", err)
 	}
 
-	log.Printf("Task: %s", t.Title)
+	logging.Infof("Task: %s", t.Title)
 
 	// Record branch in session
 	t.EnsureSession()
@@ -99,7 +101,7 @@ func run() error {
 	// Run agent
 	ag := agent.New(p, registry, tools, t, cfg.MaxIterations)
 	if err := ag.Run(ctx, systemPrompt, taskPrompt); err != nil {
-		log.Printf("Agent error: %v", err)
+		logging.Errorf("Agent error: %v", err)
 	}
 	// Populate skills in result
 	if t.Result != nil {
@@ -120,7 +122,7 @@ func run() error {
 	}
 	// Save task.json (contains questions, session, result - everything)
 	if err := t.SaveToFile(cfg.TaskFile); err != nil {
-		log.Printf("Warning: failed to save task. json: %v", err)
+		logging.Warnf("failed to save task.json: %v", err)
 	}
 	return exit(t)
 }
@@ -145,7 +147,7 @@ func evaluateAndRework(ctx context.Context, cfg *config.Config, t *task.Task, ag
 	for attempt := 0; attempt <= cfg.MaxReworkAttempts; attempt++ {
 		// Ask the AI for self-assessment
 		selfScore := getSelfAssessment(ctx, p, t)
-		log.Printf("[eval] AI self-assessment: %d/100", selfScore)
+		logging.Infof("[eval] AI self-assessment: %d/100", selfScore)
 
 		// Run full evaluation
 		sc := evaluator.Evaluate(ctx, selfScore)
@@ -153,20 +155,20 @@ func evaluateAndRework(ctx context.Context, cfg *config.Config, t *task.Task, ag
 		t.Result.ScoreDetail = sc.Breakdown
 
 		if sc.PassedCheck {
-			log.Printf("[eval] Score %d >= threshold %d - passing", sc.Total, threshold)
+			logging.Infof("[eval] Score %d >= threshold %d - passing", sc.Total, threshold)
 			return
 		}
 		if attempt >= cfg.MaxReworkAttempts {
-			log.Printf("[eval] Score %d < threshold %d - max rework attempts reached", sc.Total, threshold)
+			logging.Warnf("[eval] Score %d < threshold %d - max rework attempts reached", sc.Total, threshold)
 			return
 		}
 		// Ask agent to rework
-		log.Printf("[eval] Score %d < threshold %d - requesting rework (attempt %d/%d)", sc.Total, threshold, attempt+1, cfg.MaxReworkAttempts)
+		logging.Warnf("[eval] Score %d < threshold %d - requesting rework (attempt %d/%d)", sc.Total, threshold, attempt+1, cfg.MaxReworkAttempts)
 		reworkPrompt := buildReworkPrompt(sc, t)
 
 		agRework := agent.New(p, registry, tools, t, cfg.MaxIterations/2)
 		if err := agRework.Run(ctx, systemPrompt, reworkPrompt); err != nil {
-			log.Printf("[eval] Rework failed: %v", err)
+			logging.Errorf("[eval] Rework failed: %v", err)
 			return
 		}
 	}
@@ -181,7 +183,7 @@ func getSelfAssessment(ctx context.Context, p provider.Provider, t *task.Task) i
 
 	resp, err := p.SendMessage(ctx, conv, nil)
 	if err != nil {
-		log.Printf("[eval] Self-assessment failed: %v", err)
+		logging.Errorf("[eval] Self-assessment failed: %v", err)
 		return 50 // default to middle score on failure
 	}
 	// Parse the JSON response
@@ -200,11 +202,11 @@ func getSelfAssessment(ctx context.Context, p provider.Provider, t *task.Task) i
 
 	var assess assessResponse
 	if err := json.Unmarshal([]byte(content), &assess); err != nil {
-		log.Printf("[eval] Failed to parse self-assessment response: %v", err)
+		logging.Errorf("[eval] Failed to parse self-assessment response: %v", err)
 		return 50
 	}
 
-	log.Printf("[eval] Self-assessment reasoning: %s", assess.Reasoning)
+	logging.Debugf("[eval] Self-assessment reasoning: %s", assess.Reasoning)
 	return assess.Score
 }
 
@@ -238,13 +240,13 @@ func createPullRequest(ctx context.Context, cfg *config.Config, t *task.Task, br
 		remoteURL = cfg.RepoURL
 	}
 	if remoteURL == "" {
-		log.Printf("[pr] No remote URL available - skipping PR creation")
+		logging.Warn("[pr] No remote URL available - skipping PR creation")
 		return
 	}
 
 	owner, repo := pr.ParseRemoteURL(remoteURL)
 	if owner == "" || repo == "" {
-		log.Printf("[pr] Unable to parse owner/repo from: %s", remoteURL)
+		logging.Warnf("[pr] Unable to parse owner/repo from: %s", remoteURL)
 		return
 	}
 	baseBranch := cfg.BaseBranch
@@ -271,40 +273,40 @@ func createPullRequest(ctx context.Context, cfg *config.Config, t *task.Task, br
 
 	result, err := pr.CreatePR(ctx, prCfg, t.Title, body)
 	if err != nil {
-		log.Printf("[pr] Failed to create PR: %v", err)
+		logging.Errorf("[pr] Failed to create PR: %v", err)
 		return
 	}
 
 	t.Result.PRURL = result.URL
-	log.Printf("[pr] Created PR #%d: %s", result.Number, result.URL)
+	logging.Infof("[pr] Created PR #%d: %s", result.Number, result.URL)
 }
 
 func finalizeGit(cfg *config.Config, branch string, t *task.Task) {
 	// Comit any remaining changes
 	msg := fmt.Sprintf("agent: %s", t.Title)
 	if err := agentgit.CommitAll(cfg.WorkspacePath, msg); err != nil {
-		log.Printf("Git commit: %v", err)
+		logging.Errorf("Git commit: %v", err)
 	}
 	// Push branch if token is available
 	if cfg.GitToken != "" {
 		if err := agentgit.Push(cfg.WorkspacePath, branch, cfg.GitToken); err != nil {
-			log.Printf("Git push: %v (non-fatal)", err)
+			logging.Warnf("Git push: %v (non-fatal)", err)
 		} else {
-			log.Printf("Pushed branch %s to origin", branch)
+			logging.Infof("Pushed branch %s to origin", branch)
 		}
 	}
 }
 
 func logSkills(skills []skill.Skill) {
 	if len(skills) == 0 {
-		log.Println("No skills loaded (generic mode)")
+		logging.Info("No skills loaded (generic mode)")
 		return
 	}
 	names := make([]string, len(skills))
 	for i, s := range skills {
 		names[i] = s.Name
 	}
-	log.Printf("Skills: %v", names)
+	logging.Infof("Skills: %v", names)
 }
 
 func createProvider(cfg *config.Config) provider.Provider {

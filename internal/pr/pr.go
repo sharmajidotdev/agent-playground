@@ -1,12 +1,12 @@
 package pr
 
 import (
+	"agent/internal/logging"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os/exec"
 	"strings"
@@ -49,7 +49,7 @@ func CreatePR(ctx context.Context, cfg *Config, title, body string) (*PRResult, 
 	if platform == "" {
 		return nil, fmt.Errorf("unable to detect git platform from remote URL: %s", cfg.RemoteURL)
 	}
-	log.Printf("[pr] Creating PR on %s: %s/%s (%s + %s)", platform, cfg.RepoOwner, cfg.RepoName, cfg.HeadBranch, cfg.BaseBranch)
+	logging.Infof("[pr] Creating PR on %s: %s/%s (%s + %s)", platform, cfg.RepoOwner, cfg.RepoName, cfg.HeadBranch, cfg.BaseBranch)
 
 	switch platform {
 	case PlatformGitHub:
@@ -154,7 +154,7 @@ func BuildPRBody(taskDescription string, summary string, sc *score.Score, filesC
 
 // GetChangedFiles returns a list of files changed on the branch vs base.
 func GetChangedFiles(workDir, baseBranch string) []string {
-	cmd := exec.Command("git", "diff", " -- name-only", baseBranch+" .. HEAD")
+	cmd := exec.Command("git", "diff", " --name-only", baseBranch+" .. HEAD")
 	cmd.Dir = workDir
 	out, err := cmd.Output()
 	if err != nil {
@@ -196,6 +196,7 @@ func createGitHubPR(ctx context.Context, cfg *Config, title, body string) (*PRRe
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		logging.Errorf("GitHub API request: %v", err)
 		return nil, fmt.Errorf("GitHub API request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -203,6 +204,7 @@ func createGitHubPR(ctx context.Context, cfg *Config, title, body string) (*PRRe
 	respBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusCreated {
+		logging.Errorf("GitHub API returned %d: %s", resp.StatusCode, string(respBody))
 		return nil, fmt.Errorf("GitHub API returned %d: %s", resp.StatusCode, string(respBody))
 	}
 
@@ -250,6 +252,7 @@ func createGitLabPR(ctx context.Context, cfg *Config, title, body string) (*PRRe
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		logging.Errorf("GitLab API request: %v", err)
 		return nil, fmt.Errorf("GitLab API request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -257,6 +260,7 @@ func createGitLabPR(ctx context.Context, cfg *Config, title, body string) (*PRRe
 	respBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusCreated {
+		logging.Errorf("GitLab API returned %d: %s", resp.StatusCode, string(respBody))
 		return nil, fmt.Errorf("GitLab API returned %d: %s", resp.StatusCode, string(respBody))
 	}
 

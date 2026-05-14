@@ -159,9 +159,9 @@ func (p *Provider) parseResponse(body []byte) (*message.Response, error) {
 				Function struct {
 					Name      string          `json:"name"`
 					Arguments json.RawMessage `json:"arguments"`
-				} `json : "function"`
-			} `json: "tool_calls"`
-		} `json : "message"`
+				} `json:"function"`
+			} `json:"tool_calls"`
+		} `json:"message"`
 		Done       bool   `json:"done"`
 		DoneReason string `json:"done_reason"`
 	}

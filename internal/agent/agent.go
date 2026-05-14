@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"agent/internal/logging"
 	"agent/internal/message"
 	"agent/internal/provider"
 	"agent/internal/task"
@@ -9,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 )
 
@@ -44,7 +44,7 @@ func (a *Agent) Run(ctx context.Context, systemPrompt, taskPrompt string) error 
 	a.task.Session.Status = task.StatusInProgress
 
 	var totalUsage message.Usage
-	log.Printf("[agent] Starting with provider: %s, max iterations: %d", a.provider.Name(), a.maxIterations)
+	logging.Infof("[agent] Starting with provider: %s, max iterations: %d", a.provider.Name(), a.maxIterations)
 
 	// Phase 1: Planning - inject planning instruction and run with read-only tools.
 	// The AI structurally cannot call write/execute tools here because they are not passed.
@@ -58,10 +58,10 @@ func (a *Agent) Run(ctx context.Context, systemPrompt, taskPrompt string) error 
 
 	// Phase 2: Execution - inject handoff message and run with full tool access.
 	a.conversation.AddUserMessage(ExecutionHandoffPrompt)
-	log.Printf("[agent] Starting execution phase")
+	logging.Infof("[agent] Starting execution phase")
 
 	for iteration := 1; iteration <= a.maxIterations; iteration++ {
-		log.Printf("[agent] === Iteration %d/%d === ", iteration, a.maxIterations)
+		logging.Debugf("[agent] === Iteration %d/%d === ", iteration, a.maxIterations)
 
 		resp, err := a.provider.SendMessage(ctx, a.conversation, a.registry.Definitions())
 		if err != nil {
@@ -100,7 +100,7 @@ func (a *Agent) Run(ctx context.Context, systemPrompt, taskPrompt string) error 
 func (a *Agent) runPlanningPhase(ctx context.Context, totalUsage *message.Usage) error {
 	readonlyDefs := a.registry.DefinitionsFor(tool.ReadOnlyToolNames)
 	a.conversation.AddUserMessage(PlanningInstructionPrompt)
-	log.Printf("[agent] Starting planning phase (read-only tools: %d available)", len(readonlyDefs))
+	logging.Infof("[agent] Starting planning phase (read-only tools: %d available)", len(readonlyDefs))
 
 	maxPlanIter := a.maxIterations / 3
 	if maxPlanIter < 5 {
@@ -108,7 +108,7 @@ func (a *Agent) runPlanningPhase(ctx context.Context, totalUsage *message.Usage)
 	}
 
 	for iteration := 1; iteration <= maxPlanIter; iteration++ {
-		log.Printf("[agent] === Planning iteration %d/%d === ", iteration, maxPlanIter)
+		logging.Debugf("[agent] === Planning iteration %d/%d === ", iteration, maxPlanIter)
 
 		resp, err := a.provider.SendMessage(ctx, a.conversation, readonlyDefs)
 		if err != nil {
@@ -122,7 +122,7 @@ func (a *Agent) runPlanningPhase(ctx context.Context, totalUsage *message.Usage)
 		// No tool calls means the AI has written its plan - phase complete
 		if !resp.HasToolCalls() {
 			a.conversation.AddAssistantMessage(resp.Content, nil)
-			log.Printf("[agent] Plan produced after %d planning iterations", iteration)
+			logging.Infof("[agent] Plan produced after %d planning iterations", iteration)
 			return nil
 		}
 
@@ -135,7 +135,7 @@ func (a *Agent) runPlanningPhase(ctx context.Context, totalUsage *message.Usage)
 		}
 	}
 	// Planning timed out - Log a warning but continue to execution rather than hard-failing
-	log.Printf("[agent] Warning: planning phase reached max iterations (%d) without producing a plan - proceeding to execution", maxPlanIter)
+	logging.Warnf("[agent] Warning: planning phase reached max iterations (%d) without producing a plan - proceeding to execution", maxPlanIter)
 	return nil
 }
 
@@ -150,7 +150,7 @@ func (a *Agent) setCompleted(iterations int, usage message.Usage, summary string
 		Provider:    a.provider.Name(),
 		TotalTokens: usage.InputTokens + usage.OutputTokens,
 	}
-	log.Printf("[agent] Completed in %d iterations", iterations)
+	logging.Infof("[agent] Completed in %d iterations", iterations)
 }
 
 func (a *Agent) setFailed(iterations int, usage message.Usage, reason string) {
@@ -183,7 +183,7 @@ func (a *Agent) setPaused(iterations int, usage message.Usage) {
 		Provider:    a.provider.Name(),
 		TotalTokens: usage.InputTokens + usage.OutputTokens,
 	}
-	log.Printf("[agent] Paused: %d questions pending", len(questions))
+	logging.Warnf("[agent] Paused: %d questions pending", len(questions))
 }
 func (a *Agent) recordAssistantBlocks(resp *message.Response) {
 	var blocks []message.Block
@@ -204,7 +204,7 @@ func (a *Agent) recordAssistantBlocks(resp *message.Response) {
 func (a *Agent) executeToolCalls(ctx context.Context, calls []message.ToolCall) {
 	var results []message.ToolResult
 	for _, tc := range calls {
-		log.Printf("[agent] Tool: %s", tc.Name)
+		logging.Debugf("[agent] Tool: %s", tc.Name)
 
 		toolCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 		output, err := a.registry.Execute(toolCtx, tc.Name, tc.Input)

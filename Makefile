@@ -17,7 +17,7 @@ docker-build:
 
 # Run with Docker (example with Claude)
 docker-run:
-	docker run -- rm \
+	docker run --rm \
 		-e ANTHROPIC_API_KEY=$(ANTHROPIC_API_KEY) \
 		-v $(PWD)/workspace:/workspace \
 		-v $(PWD)/skills:/skills \
@@ -25,7 +25,7 @@ docker-run:
 
 # Run with Docker Compose
 compose-up:
-	docker-compose up -- build
+	docker-compose up --build
 
 # Run tests
 test:

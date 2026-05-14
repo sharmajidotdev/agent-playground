@@ -31,6 +31,9 @@ type Config struct {
 	SkillsPath    string
 	TaskFile      string
 
+	// Logging
+	LogLevel string
+
 	// Git settings
 	GitToken    string
 	RepoURL     string
@@ -51,7 +54,7 @@ func Load() (*Config, error) {
 		OllamaURL:         os.Getenv("OLLAMA_URL"),
 		ClaudeModel:       getEnvOr("CLAUDE_MODEL", "claude-sonnet-4-20250514"),
 		OpenAIModel:       getEnvOr("OPENAI_MODEL", "gpt-40"),
-		OllamaModel:       getEnvOr("OLLAMA_MODEL", "llama3.2"),
+		OllamaModel:       getEnvOr("OLLAMA_MODEL", "qwen2.5:3b"),
 		WorkspacePath:     getEnvOr("WORKSPACE_PATH", "/workspace"),
 		SkillsPath:        getEnvOr("SKILLS_PATH", "/skills"),
 		TaskFile:          getEnvOr("TASK_FILE", "/workspace/.task.json"),
@@ -62,6 +65,7 @@ func Load() (*Config, error) {
 		MaxIterations:     getEnvInt("MAX_ITERATIONS", 50),
 		MaxReworkAttempts: getEnvInt("MAX_REWORK_ATTEMPTS", 2),
 		ToolTimeout:       getEnvInt("TOOL_TIMEOUT", 60),
+		LogLevel:          getEnvOr("LOG_LEVEL", "INFO"),
 	}
 
 	// Select provider by priority: Claude > OpenAI > Ollama

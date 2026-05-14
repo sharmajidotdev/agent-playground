@@ -1,4 +1,6 @@
+# =========================
 # Build stage
+# =========================
 FROM golang:1.22-alpine AS builder
 
 WORKDIR /build
@@ -13,11 +15,16 @@ COPY . .
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /build/agent ./cmd/agent
 
+
+# =========================
 # Runtime stage
+# =========================
 FROM ubuntu:24.04
 
-# Install common development tools
-RUN apt-get update && apt-get install -y -- no-install-recommends \
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install development tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     wget \
@@ -36,15 +43,19 @@ RUN apt-get update && apt-get install -y -- no-install-recommends \
 
 # Install Go
 RUN curl -fsSL https://go.dev/dl/go1.22.5.linux-amd64.tar.gz | tar -C /usr/local -xzf -
+
 ENV PATH="/usr/local/go/bin:${PATH}"
 
-# Copy the agent binary
+# Prevent issues when running with arbitrary UID
+ENV HOME=/tmp
+
+# Copy agent binary
 COPY --from=builder /build/agent /usr/local/bin/agent
 
-# Create workspace and skills directories
+# Create workspace directories
 RUN mkdir -p /workspace /skills
 
-# Set workspace as working directory
+# Set working directory
 WORKDIR /workspace
 
 # Default environment variables
@@ -53,6 +64,5 @@ ENV SKILLS_PATH=/skills
 ENV TASK_FILE=/workspace/.task.json
 ENV MAX_ITERATIONS=50
 ENV TOOL_TIMEOUT=60
-# GIT_TOKEN, REPO_URL, BASE_BRANCH set at runtime (never bake secrets into images)
 
 ENTRYPOINT ["/usr/local/bin/agent"]

@@ -1,0 +1,19 @@
+{
+  "title": "Create a landing page in plain HTML/CSS",
+  "description": "A landing page with minimal design as a personal portfolio for a developer. The page should include a header, a brief bio, a list of projects with links, and a contact section.",
+  "session": {
+    "status": "failed",
+    "branch": "agent/20260514-224737",
+    "iterations": 1,
+    "last_updated": "2026-05-14T22:45:11.33898774Z"
+  },
+  "result": {
+    "status": "failure",
+    "summary": "provider error in planning: request failed: Post \"http://192.168.1.200:11434/api/chat\": dial tcp 192.168.1.200:11434: i/o timeout",
+    "branch": "agent/20260514-224737",
+    "iterations": 1,
+    "provider": "ollama",
+    "total_tokens": 0,
+    "error": "provider error in planning: request failed: Post \"http://192.168.1.200:11434/api/chat\": dial tcp 192.168.1.200:11434: i/o timeout"
+  }
+}

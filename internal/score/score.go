@@ -1,9 +1,9 @@
 package score
 
 import (
+	"agent/internal/logging"
 	"context"
 	"fmt"
-	"log"
 	"os/exec"
 	"strings"
 )
@@ -38,22 +38,22 @@ func (e *Evaluator) Evaluate(ctx context.Context, selfAssessScore int) *Score {
 	// 1. Build Check
 	buildScore := e.checkBuild(ctx)
 	s.Breakdown["build"] = buildScore
-	log.Printf("[score] Build: %d/%d", buildScore, WeightBuild)
+	logging.Infof("[score] Build: %d/%d", buildScore, WeightBuild)
 
 	// 2. Test Check
 	testScore := e.checkTests(ctx)
 	s.Breakdown["tests"] = testScore
-	log.Printf("[score] Tests: %d/%d", testScore, WeightTests)
+	logging.Infof("[score] Tests: %d/%d", testScore, WeightTests)
 
 	// 3. Lint Check
 	lintScore := e.checkLint(ctx)
 	s.Breakdown["lint"] = lintScore
-	log.Printf("[score] Lint: %d/%d", lintScore, WeightLint)
+	logging.Infof("[score] Lint: %d/%d", lintScore, WeightLint)
 
 	// 4. Self-Assessment (AI judgment)
 	aiScore := scaleScore(selfAssessScore, WeightSelfAssess)
 	s.Breakdown["self_assessment"] = aiScore
-	log.Printf("[score] Self-Assessment: %d/%d", aiScore, WeightSelfAssess)
+	logging.Infof("[score] Self-Assessment: %d/%d", aiScore, WeightSelfAssess)
 
 	// Calculate total score
 	s.Total = buildScore + testScore + lintScore + aiScore
@@ -61,7 +61,7 @@ func (e *Evaluator) Evaluate(ctx context.Context, selfAssessScore int) *Score {
 
 	//Generate details
 	s.Details = e.generateDetails(s)
-	log.Printf("[score] Total: %d/100 (threshold: %d, passed: %v)", s.Total, e.Threshold, s.PassedCheck)
+	logging.Infof("[score] Total: %d/100 (threshold: %d, passed: %v)", s.Total, e.Threshold, s.PassedCheck)
 	return s
 }
 
@@ -138,10 +138,10 @@ func (e *Evaluator) detectTestCommand() string {
 
 	if fileExists(e.WorkDir + "/package.json") {
 		if fileExists(e.WorkDir + "/yarn. lock") {
-			return "yarn test -- passWithNoTests"
+			return "yarn test --passWithNoTests"
 		}
 
-		return "npm test -- -- passWithNoTests"
+		return "npm test --passWithNoTests"
 	}
 
 	if fileExists(e.WorkDir + "/Cargo.toml") {
@@ -159,7 +159,7 @@ func (e *Evaluator) detectLintCommand() string {
 	}
 
 	if fileExists(e.WorkDir+"/.eslintrc. json") || fileExists(e.WorkDir+"/.eslintrc. js") || fileExists(e.WorkDir+"/eslint.config.js") {
-		return "npx eslint . -- max-warnings 0"
+		return "npx eslint . --max-warnings 0"
 	}
 	return ""
 }
@@ -197,7 +197,7 @@ func runCmd(ctx context.Context, dir, command string) error {
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Printf("[score] Command failed: %s\n%s", command, string(out))
+		logging.Errorf("[score] Command failed: %s\n%s", command, string(out))
 	}
 	return err
 }
