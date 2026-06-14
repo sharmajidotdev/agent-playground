@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -102,6 +103,10 @@ func run() error {
 	ag := agent.New(p, registry, tools, t, cfg.MaxIterations)
 	if err := ag.Run(ctx, systemPrompt, taskPrompt); err != nil {
 		logging.Errorf("Agent error: %v", err)
+	}
+	// Write detailed execution log
+	if err := writeExecutionLog(cfg.WorkspacePath, t, systemPrompt, taskPrompt); err != nil {
+		logging.Warnf("Failed to write execution log: %v", err)
 	}
 	// Populate skills in result
 	if t.Result != nil {
@@ -339,5 +344,65 @@ func exit(t *task.Task) error {
 	default:
 		os.Exit(2)
 	}
+	return nil
+}
+
+func writeExecutionLog(workspacePath string, t *task.Task, systemPrompt, taskPrompt string) error {
+	logPath := filepath.Join(workspacePath, ".agent-execution.log")
+
+	var buf strings.Builder
+	buf.WriteString("=== AI Agent Execution Log ===\n")
+	buf.WriteString(fmt.Sprintf("Timestamp: %s\n", time.Now().Format(time.RFC3339)))
+	buf.WriteString(fmt.Sprintf("Task: %s\n", t.Title))
+	buf.WriteString(fmt.Sprintf("Task Status: %s\n\n", t.Result.Status))
+
+	buf.WriteString("--- SYSTEM PROMPT ---\n")
+	buf.WriteString(systemPrompt)
+	buf.WriteString("\n\n")
+
+	buf.WriteString("--- TASK PROMPT ---\n")
+	buf.WriteString(taskPrompt)
+	buf.WriteString("\n\n")
+
+	if t.Result != nil {
+		buf.WriteString("--- EXECUTION RESULT ---\n")
+		buf.WriteString(fmt.Sprintf("Status: %s\n", t.Result.Status))
+		buf.WriteString(fmt.Sprintf("Provider: %s\n", t.Result.Provider))
+		buf.WriteString(fmt.Sprintf("Iterations: %d\n", t.Result.Iterations))
+		buf.WriteString(fmt.Sprintf("Total Tokens: %d\n", t.Result.TotalTokens))
+		if t.Result.Summary != "" {
+			buf.WriteString(fmt.Sprintf("Summary: %s\n", t.Result.Summary))
+		}
+		if t.Result.Error != "" {
+			buf.WriteString(fmt.Sprintf("Error: %s\n", t.Result.Error))
+		}
+		buf.WriteString("\n")
+	}
+
+	if len(t.Questions) > 0 {
+		buf.WriteString("--- PENDING QUESTIONS ---\n")
+		for i, q := range t.Questions {
+			buf.WriteString(fmt.Sprintf("Question %d (ID: %s):\n", i+1, q.ID))
+			if q.Question != "" {
+				buf.WriteString(fmt.Sprintf("  Question: %s\n", q.Question))
+			}
+			if q.Context != "" {
+				buf.WriteString(fmt.Sprintf("  Context: %s\n", q.Context))
+			}
+			if len(q.Options) > 0 {
+				buf.WriteString("  Options:\n")
+				for j, opt := range q.Options {
+					buf.WriteString(fmt.Sprintf("    %d. %s\n", j+1, opt))
+				}
+			}
+			buf.WriteString("\n")
+		}
+	}
+
+	if err := os.WriteFile(logPath, []byte(buf.String()), 0644); err != nil {
+		return fmt.Errorf("failed to write execution log: %w", err)
+	}
+
+	logging.Infof("Execution log written to %s", logPath)
 	return nil
 }

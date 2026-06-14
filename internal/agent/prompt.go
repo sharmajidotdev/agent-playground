@@ -41,16 +41,16 @@ Once you understand the codebase and task, create a detailed plan:
 
 ### Phase 3: EXECUTE (work through the plan step by step)
 1. Work through your todo list ONE item at a time
-2. After completing each step, verify it works (run tests, check for errors)
+2. After completing each step, verify it works (run tests if expected, check for errors)
 3. Mark each step as done as you go
 4. If a step reveals something unexpected, STOP - update your plan before continuing
-5. Commit logical units of work with git as you go
+5. Continue until all items in your plan are complete
 
 ### Phase 4: VERIFY (confirm everything works)
 1. Run the full test suite
 2. Run build/lint to ensure no regressions
-3. Review your changes as a whole - does it fully address the task?
-4. Provide a brief summary of what was done
+3. Review your final changes - does it fully address the task?
+4. Output a final summary of what was done
 
 ### CRITICAL RULES FOR THIS WORKFLOW:
 - NEVER start writing code until Phase 2 (plan) is complete
@@ -174,11 +174,22 @@ Implementation will begin in the next phase once your plan is reviewed.`
 // ExecutionHandoffPrompt is injected to transition from planning to execution.
 const ExecutionHandoffPrompt = `Planning phase complete. Write/execute tools are now available.
 
-Work through your plan step by step:
-- Execute each item in order
-- Verify after each step (run tests/build)
-- Mark steps done as you go
-- If something unexpected arises, explain the deviation before continuing`
+CRITICAL: Work through your entire plan COMPLETELY. Do NOT stop early.
+
+Execute each item in your plan:
+1. Work through every step methodically
+2. After completing each step, verify it works (call tools - do not just describe what to do)
+3. Continue to the next step immediately after verification
+4. Do NOT output summaries or status updates without calling tools
+5. Keep executing until ALL plan items are marked complete
+
+STOP CONDITIONS (only stop when one of these is true):
+- You have completed every step in your plan AND verified the final result works
+- An unrecoverable error occurs that prevents further progress
+- You explicitly need user input (use ask_question tool)
+
+If you finish a step, do NOT output "done with step X" - instead, immediately execute the next step.
+Keep calling tools in every iteration. Do not output thoughts, status updates, or reflections without accompanying tool calls.`
 
 // BuildSystemPrompt constructs the full system prompt incorporating skills.
 func BuildSystemPrompt(skills []skill.Skill, registry *tool.Registry) string {

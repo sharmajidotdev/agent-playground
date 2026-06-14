@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+
+	"agent/internal/logging"
 )
 
 // PendingQuestion holds a question the agent wants to ask.
@@ -59,6 +61,9 @@ func (t *AskQuestion) Execute(ctx context.Context, input json.RawMessage) (strin
 	if err := json.Unmarshal(input, &params); err != nil {
 		return "", fmt.Errorf("invalid input: %w", err)
 	}
+
+	// Log the received parameters for debugging
+	logging.Debugf("[ask_question] Received question='%s', context='%s', options=%v", params.Question, params.Context, params.Options)
 
 	t.mu.Lock()
 	t.counter++

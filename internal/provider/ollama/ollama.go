@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"agent/internal/logging"
 	"agent/internal/message"
 	"agent/internal/tool"
 )
@@ -41,6 +42,10 @@ func (p *Provider) SendMessage(ctx context.Context, conv *message.Conversation, 
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
+	// Log the request
+	logging.Debugf("[ollama] Sending request to %s/api/chat with model %s", p.baseURL, p.model)
+	logging.Debugf("[ollama] Request body: %s", string(jsonData))
+
 	url := p.baseURL + "/api/chat"
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonData))
 	if err != nil {
@@ -61,11 +66,14 @@ func (p *Provider) SendMessage(ctx context.Context, conv *message.Conversation, 
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		logging.Warnf("[ollama] API error (status %d): %s", resp.StatusCode, string(body))
 		return nil, fmt.Errorf("ollama API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	return p.parseResponse(body)
+	// Log the response
+	logging.Debugf("[ollama] Response: %s", string(body))
 
+	return p.parseResponse(body)
 }
 
 func (p *Provider) buildRequest(conv *message.Conversation, tools []tool.Definition) map[string]interface{} {
@@ -169,13 +177,23 @@ func (p *Provider) parseResponse(body []byte) (*message.Response, error) {
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
+
+	// Log parsed response
+	logging.Debugf("[ollama] Parsed response: role=%s, content_length=%d, tool_calls=%d",
+		resp.Message.Role, len(resp.Message.Content), len(resp.Message.ToolCalls))
+	if resp.Message.Content != "" {
+		logging.Debugf("[ollama] Response content: %s", resp.Message.Content)
+	}
+
 	result := &message.Response{
 		Content: resp.Message.Content,
 	}
 
 	if len(resp.Message.ToolCalls) > 0 {
 		result.StopReason = message.StopToolUse
+		logging.Debugf("[ollama] Tool calls detected: %d", len(resp.Message.ToolCalls))
 		for i, tc := range resp.Message.ToolCalls {
+			logging.Debugf("[ollama] Tool call %d: %s", i, tc.Function.Name)
 			result.ToolCalls = append(result.ToolCalls, message.ToolCall{
 				ID:    fmt.Sprintf("ollama_%d", i),
 				Name:  tc.Function.Name,

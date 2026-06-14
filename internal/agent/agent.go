@@ -74,8 +74,17 @@ func (a *Agent) Run(ctx context.Context, systemPrompt, taskPrompt string) error 
 
 		// No tool calls - agent is done
 		if !resp.HasToolCalls() {
+			logging.Infof("[agent] No tool calls detected at iteration %d - agent signaling completion", iteration)
+			if resp.Content != "" {
+				logging.Debugf("[agent] Final response: %s", resp.Content)
+			}
 			a.setCompleted(iteration, totalUsage, resp.Content)
 			return nil
+		}
+
+		logging.Debugf("[agent] Tool calls: %d", len(resp.ToolCalls))
+		for _, tc := range resp.ToolCalls {
+			logging.Debugf("[agent]   - %s", tc.Name)
 		}
 
 		// Record assistant message and execute tools
